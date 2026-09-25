@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reviewwflow</title>
+<meta name="theme-color" content="#0d0b08">
+<link rel="icon" href="icon.svg">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<!-- 🔒 team gate: server-verified shared password before the admin opens.
+     Content is rendered by renderGate() in app.js (password / name / owner modes). -->
+<div id="lockscreen">
+  <div class="lock-box" id="lock-box"></div>
+</div>
+<!-- 🔐 PVT CONFER: owner's private audit room -->
+<div id="confer" style="display:none">
+  <div class="confer-head">
+    <h2>🔐 PVT CONFER</h2>
+    <div class="confer-actions">
+      <button class="btn ghost small" onclick="renderConfer()">↻</button>
+      <button class="btn ghost small" onclick="closeConfer()">✕</button>
+    </div>
+  </div>
+  <div id="confer-body" class="confer-body"></div>
+</div>
+<div id="app">
+  <div id="topbar">
+    <div class="logo">V</div>
+    <h1>Reviewwflow</h1>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <button id="pvt-btn" class="btn ghost small" style="display:none" onclick="openConfer()" title="PVT Confer — owner only">PVT</button>
+      <button class="btn ghost small" onclick="gateLock()" title="Lock now">🔒</button>
+    </div>
+  </div>
+
+  <main>
+    <!-- HOME -->
+    <section id="tab-home" class="tab active">
+      <h2 class="sec">Today</h2>
+      <div class="grid2">
+        <div class="stat"><div class="n"><button class="step" onclick="nudgeStat('clients',-1)" aria-label="decrease">−</button><span id="st-clients">0</span><button class="step" onclick="nudgeStat('clients',1)" aria-label="increase">+</button></div><div class="l">Clients</div></div>
+        <div class="stat"><div class="n"><button class="step" onclick="nudgeStat('cards',-1)" aria-label="decrease">−</button><span id="st-cards">0</span><button class="step" onclick="nudgeStat('cards',1)" aria-label="increase">+</button></div><div class="l">Cards issued</div></div>
+        <div class="stat"><div class="n"><button class="step" onclick="nudgeStat('pitched',-1)" aria-label="decrease">−</button><span id="st-pitched">0</span><button class="step" onclick="nudgeStat('pitched',1)" aria-label="increase">+</button></div><div class="l">Pitched</div></div>
+        <div class="stat"><div class="n"><button class="step" onclick="nudgeStat('bought',-1)" aria-label="decrease">−</button><span id="st-bought">0</span><button class="step" onclick="nudgeStat('bought',1)" aria-label="increase">+</button></div><div class="l">Bought 💰</div></div>
+        <div class="stat"><div class="n" id="st-conv">0%</div><div class="l">Conversion</div></div>
+        <div class="stat"><div class="n" id="st-mrr">₹0</div><div class="l">Monthly recurring</div></div>
+      </div>
+      <h2 class="sec">Quick actions</h2>
+      <div class="card">
+        <div class="btnrow" style="margin-top:0">
+          <button class="btn" onclick="openClientModal()">+ Client</button>
+          <button class="btn" onclick="openCardModal()">+ Card</button>
+        </div>
+        <div class="btnrow">
+          <button class="btn ghost" onclick="switchTab('sectors')">📌 Sectors</button>
+        </div>
+      </div>
+      <h2 class="sec">Tap system connection</h2>
+      <div class="card">
+        <p class="hintline">Connects this admin to your Cloudflare review system, so "Publish" on a client pushes their page live for NFC taps.</p>
+        <div class="field"><label>Worker URL</label><input id="set-worker" placeholder="https://xxx.workers.dev"></div>
+        <div class="field"><label>Admin password</label><input id="set-key" type="password" placeholder="ADMIN_PASSWORD"></div>
+        <button class="btn ghost" onclick="saveSettings()">Save connection</button>
+        <div class="btnrow">
+          <button class="btn ghost" onclick="testConnection()">🔌 Test connection</button>
+        </div>
+        <p class="hintline" id="set-status"></p>
+      </div>
+      <h2 class="sec">Backup</h2>
+      <div class="card">
+        <div class="btnrow" style="margin-top:0">
+          <button class="btn ghost" onclick="exportData()">⬇ Export</button>
+          <button class="btn ghost" onclick="document.getElementById('import-file').click()">⬆ Import</button>
+        </div>
+        <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importData(this)">
+      </div>
+    </section>
+
+    <!-- CLIENTS -->
+    <section id="tab-clients" class="tab">
+      <h2 class="sec">Clients <span id="client-count" style="color:var(--brand)"></span></h2>
+      <input class="search" id="client-search" placeholder="🔍 Search clients…" oninput="renderClients()">
+      <div id="client-list"></div>
+      <button class="fab" onclick="openClientModal()">+</button>
+    </section>
+
+    <!-- CARDS -->
+    <section id="tab-cards" class="tab">
+      <h2 class="sec">NFC Cards <span id="card-count" style="color:var(--brand)"></span></h2>
+      <p class="hintline">Each card is programmed with the client's tap link. The link opens the customer review page — only on a tap. You never need to open it.</p>
+      <div id="card-list"></div>
+      <button class="fab" onclick="openCardModal()">+</button>
+    </section>
+
+    <!-- SECTORS -->
+    <section id="tab-sectors" class="tab">
+      <h2 class="sec">100 sector pitch map</h2>
+      <p class="hintline">Tap a sector → find real businesses on live OSM data → build an ordered 3D pitch route. One sector = one pitch day.</p>
+      <input class="search" id="sector-search" placeholder="🔍 Search sectors…" oninput="renderSectors()">
+      <div id="sector-list"></div>
+    </section>
+    <section id="tab-packs" class="tab">
+      <h2 class="sec">📦 Pitch packs</h2>
+      <p class="hintline">Your daily high-end lead pack. No OSM wait, no uploads.</p>
+      <div class="card">
+        <b>How your pitch day works</b>
+        <div class="sub2" style="margin-top:6px;line-height:1.7">
+          ① Tell Muse the area — <i>"S042"</i>, <i>"Malad West"</i>, or <i>"next area after Bandra"</i> — any day, any piece of Mumbai.<br>
+          ② Muse researches <b>70–80 high-end businesses</b> (100–1000 Google reviews) and sends you the day's pack.<br>
+          ③ Paste it below → <b>Open</b> → your route is ready. That's it.
+        </div>
+      </div>
+      <div class="card">
+        <b>📥 Paste today's pack</b>
+        <p class="hintline">Copy the full pack block from chat and paste it here.</p>
+        <textarea id="pack-tab-paste" class="notein" rows="5" placeholder='{"sector":"S042","stops":[...]}' style="font-family:monospace;font-size:11px"></textarea>
+        <div class="btnrow"><button class="btn" onclick="packSaveFromTab()">💾 Save pack</button></div>
+      </div>
+      <h2 class="sec">Saved packs</h2>
+      <div id="pack-list"></div>
+    </section>
+  </main>
+
+  <nav id="bottomnav">
+    <button data-tab="home" class="on" onclick="switchTab('home')"><span class="ic">🏠</span>Home</button>
+    <button data-tab="clients" onclick="switchTab('clients')"><span class="ic">👥</span>Clients</button>
+    <button data-tab="cards" onclick="switchTab('cards')"><span class="ic">📳</span>Cards</button>
+    <button data-tab="sectors" onclick="switchTab('sectors')"><span class="ic">📌</span>Sectors</button>
+    <button data-tab="packs" onclick="switchTab('packs')"><span class="ic">📦</span>Packs</button>
+  </nav>
+</div>
+
+<!-- SECTOR DETAIL -->
+<div id="sectorview">
+  <div class="zv-head">
+    <button class="iconbtn" onclick="closeSector()">←</button>
+    <div class="grow"><div class="name" id="sec-name"></div><div class="sub2" id="sec-sub"></div></div>
+    <span id="sec-tier"></span>
+  </div>
+  <div id="secmap"></div>
+  <div class="zv-body">
+    <div class="card">
+      <div class="row"><div class="grow"><b>Pitch route</b><div class="sub2" id="sec-progress-label"></div></div></div>
+      <div class="prog"><div id="sec-progress" style="width:0%"></div></div>
+      <div class="sub2" id="sec-dayplan" style="margin-top:6px"></div>
+      <p class="hintline">🔍 <b>Find businesses</b> pulls <b>live OSM data</b> (no review counts — OSM doesn't have them; coverage varies by area).</p>
+      <div class="btnrow">
+        <button class="btn" onclick="sectorTakeMeThere()">🧭 Take me to the sector</button>
+      </div>
+      <div class="btnrow" id="sec-transport">
+        <button class="btn ghost small" data-tm="walk" onclick="setTransportMode('walk')">🚶 Walk</button>
+        <button class="btn ghost small" data-tm="twowheeler" onclick="setTransportMode('twowheeler')">🛵 Two-wheeler</button>
+        <button class="btn ghost small" data-tm="car" onclick="setTransportMode('car')">🚗 Car</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost" onclick="sectorResearch()">🔍 Find businesses</button>
+        <button class="btn ghost" id="sec-curated-btn" style="display:none" onclick="sectorLoadCurated()">📂 Load curated list</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost" onclick="sectorPastePack()">📦 Paste today's pack</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost" onclick="sectorWidenSearch()">🌐 Widen search</button>
+        <button class="btn ghost" onclick="sectorAddManual()">➕ Add manually</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn" onclick="sectorRouteFromHere()">📍 Route from my location</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost" onclick="openAR()">📷 AR Mode</button>
+        <button class="btn ghost" id="mapstyle-btn" onclick="toggleMapStyle()">🌙 Dark map</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost" onclick="sectorBuildRoute()">🧭 Build route order</button>
+        <button class="btn ghost" onclick="sectorOpenMapsChunk()">📍 Maps</button>
+      </div>
+    </div>
+    <h2 class="sec">Stops <span id="sec-count" style="color:var(--brand)"></span></h2>
+    <div id="sec-list"></div>
+  </div>
+</div>
+
+<div id="modal-root"><div id="modal-bg" onclick="closeModal()"></div><div id="modal"></div></div>
+<div id="toast"></div>
+
+<!-- AR Mode overlay: camera background + compass arrow to next stop -->
+<div id="ar-overlay" style="display:none">
+  <video id="ar-video" autoplay playsinline muted></video>
+  <div id="ar-cross">+</div>
+  <div id="ar-card">
+    <div id="ar-head"><span id="ar-head-icon">📍</span> <span id="ar-where">Locating…</span></div>
+    <div id="ar-target"></div>
+    <div id="ar-arrow">➤</div>
+    <div id="ar-dist"></div>
+  </div>
+  <button id="ar-reached" class="btn" onclick="arReached()">✅ Reached — next</button>
+  <button id="ar-close" class="btn ghost" onclick="closeAR()">✕ Close AR</button>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="template-generator.js"></script>
+<script src="packs.js"></script>
+<script src="app.js"></script>
+<script>
+// Register the service worker for the ADMIN app (installable PWA).
+// (The customer tap page deliberately does NOT register it.)
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
